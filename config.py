@@ -15,7 +15,7 @@ def add_default_args(parser):
 
     files.add_argument('--run_mode', type=str, default='train',
                        help='select a mode for train model or generate prediction from checkpoint')
-    files.add_argument('--preprocess_folder', type=str, default=preprocess_folder,
+    files.add_argument('--preprocess_folder', type=str, default=preprocess_folder,  # "./DATA/cached_features"
                        help='Directory of preprocess data')
     files.add_argument("--pretrain_model_path", type=str, default=MODEL_DIR,  # MODEL_DIR = "./DATA/pretrain_model/"
                        help="Path to pre-trained model.")
@@ -33,7 +33,7 @@ def add_default_args(parser):
     runtime.add_argument('--no_cuda', action='store_true', default=False,
                          help='Train Model on GPUs (False)')
     runtime.add_argument("--local_rank", type=int, default=-1,
-                         help="set ocal_rank=0 for distributed training on multiple gpus")
+                         help="set local_rank=0 for distributed training on multiple gpus")
     runtime.add_argument('--data_workers', type=int, default=2,
                          help='Number of subprocesses for data loading')
     runtime.add_argument('--seed', type=int, default=42,

@@ -18,7 +18,7 @@ class IdxTag_Converter(object):
         tag2idx = {}
         for idx, tag in enumerate(idx2tag):
             tag2idx[tag] = idx
-        self.tag2idx = tag2idx
+        self.tag2idx = tag2idx  # {'O': 0, 'B': 1, ..., 'U':4}
 
     def convert_idx2tag(self, index_list):
         tag_list = [self.idx2tag[index] for index in index_list]

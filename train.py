@@ -123,6 +123,7 @@ if __name__ == "__main__":
     args.num_labels = len(Idx2Tag)  # Idx2Tag = ['O', 'B', 'I', 'E', 'U']
 
     # -------------------------------------------------------------------------------------------
+    # 1.远程debug
     # Setup distant debugging if needed
     if args.server_ip and args.server_port:
         # Distant debugging - see https://code.visualstudio.com/docs/python/debugging#_attach-to-a-local-script
@@ -133,6 +134,7 @@ if __name__ == "__main__":
         ptvsd.wait_for_attach()
 
     # -------------------------------------------------------------------------------------------
+    # 2.设置GPU环境
     # Setup CUDA, GPU & distributed training
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     if args.local_rank == -1 or args.no_cuda:
@@ -148,32 +150,101 @@ if __name__ == "__main__":
                 args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16)
 
     # -------------------------------------------------------------------------------------------
+    # 3.随机种子
     set_seed(args)
     if args.local_rank not in [-1, 0]:
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
     # -------------------------------------------------------------------------------------------
+    # 4.构建分词对象tokenizer，构建idx和tag转换字典
     # init tokenizer & Converter 
-    tokenizer = BertTokenizer.from_pretrained(args.cache_dir)
-    converter = IdxTag_Converter(Idx2Tag)
+    tokenizer = BertTokenizer.from_pretrained(args.cache_dir)  # bert-base-cased
+    converter = IdxTag_Converter(Idx2Tag)  # Idx2Tag = ['O', 'B', 'I', 'E', 'U']
 
     # -------------------------------------------------------------------------------------------
+    # 5.加载数据
     # build dataloaders
     logger.info("start loading openkp datasets ...")
+    """
+    `args.run_mode` in ['train', 'generate'] :
+        dataset_dict for `train`:
+        {
+            'train': [{}, {}, ...],
+            'valid': [{}, {}, ...]
+        }
+
+        dataset_dict for `generate`:
+        {
+            'eval_public': [{}, {}, ...],
+            'valid': [{}, {}, ...]
+        }
+        
+        --------------------
+            for `train` and `valid` :
+            [
+                {
+                    'url': 'http://...',
+                    'ex_id': 0-n Int index,
+                    'tokens': ['Th##', '##is', 'is', 'a', 'test', ...],
+                    'label': ['O', 'O', 'B', 'I', 'I', 'E', 'O', 'O', 'O', ...],
+                    'valid_mask': [1,     0,      1,     1,   1, ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
+                    'tok_to_orig_index': [0,      0,      1,    2,   3,     ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
+                    'orig_tokens': [w1, w2, w3, ...],
+                    'orig_phrases': [[kp_w1, kp_w2, ...], ...],
+                    'orig_start_end_pos': [[s1, e1], [s2, e2], ..., [s2_1, e2_1], [s2_2, e2_2], ...]
+                },
+                ...
+            ]
+        
+            for `eval_public` :
+            [
+                {
+                    'url': 'http://...',
+                    'ex_id': 0-n Int index,
+                    'VDOM': xxx,
+                    'tokens': ['Th##', '##is', 'is', 'a', 'test', ...],
+                    'valid_mask': [1,     0,      1,     1,   1, ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
+                    'tok_to_orig_index': [0,      0,      1,    2,   3,     ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
+                    'orig_tokens': [w1, w2, w3, ...],
+                },
+                ...
+            ]
+    """
     dataset_dict = utils.read_openkp_examples(args, tokenizer)
 
+    # 构建训练数据
     # train dataloader
+    """
+    `args.per_gpu_train_batch_size`: Batch size per GPU/CPU for training.
+    
+    `train_dataset` : 
+        index, src_tensor, valid_mask, label_tensor        (for `train` or `dev`)
+        index, src_tensor, valid_mask, valid_orig_doc_len  (for `test`)
+    """
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
+    # 转为id，转为tensor
     train_dataset = utils.build_openkp_dataset(args, dataset_dict['train'], tokenizer, converter)
 
+    """
+    set local_rank=0 for distributed training on multiple gpus.
+    """
     train_sampler = torch.utils.data.sampler.RandomSampler(
         train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
+
+    """
+    `torch.utils.data.DataLoader`:
+        Data loader. Combines a dataset and a sampler, and provides
+        single- or multi-process iterators over the dataset.
+    
+    `args.data_workers`, 
+        Number of subprocesses for data loading, default=2
+    """
     train_data_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=args.train_batch_size,
         sampler=train_sampler,
         num_workers=args.data_workers,
-        collate_fn=utils.batchify_features_for_train_eval,
-        pin_memory=args.cuda,
+        collate_fn=utils.batchify_features_for_train_eval,  # merges a list of samples to form a mini-batch
+        pin_memory=args.cuda,  # bool
     )
 
     # valid dataset
@@ -196,7 +267,7 @@ if __name__ == "__main__":
     # Set training total steps
     if args.max_train_steps > 0:
         t_total = args.max_train_steps
-        args.max_train_epochs = args.max_train_steps // (len(train_dataloader) // args.gradient_accumulation_steps) + 1
+        args.max_train_epochs = args.max_train_steps // (len(train_data_loader) // args.gradient_accumulation_steps) + 1
     else:
         t_total = len(train_data_loader) // args.gradient_accumulation_steps * args.max_train_epochs
 

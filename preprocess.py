@@ -488,15 +488,18 @@ def main_preocess(input_mode, save_mode):
     elif input_mode == 'EvalPublic':  # testset
         """
         return_examples: (for testset)
-            {
-                'url': 'http://...',
-                'ex_id': 0-n Int index,
-                'VDOM': xxx,
-                'tokens': ['Th##', '##is', 'is', 'a', 'test', ...],
-                'valid_mask': [1,     0,      1,     1,   1, ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
-                'tok_to_orig_index': [0,      0,      1,    2,   3,     ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
-                'orig_tokens': [w1, w2, w3, ...],
-            }
+            [
+                {
+                    'url': 'http://...',
+                    'ex_id': 0-n Int index,
+                    'VDOM': xxx,
+                    'tokens': ['Th##', '##is', 'is', 'a', 'test', ...],
+                    'valid_mask': [1,     0,      1,     1,   1, ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
+                    'tok_to_orig_index': [0,      0,      1,    2,   3,     ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
+                    'orig_tokens': [w1, w2, w3, ...],
+                },
+                ...
+            ]
         """
         return_examples = preprocess_for_Eval(source_data, tokenizer)
     else:
