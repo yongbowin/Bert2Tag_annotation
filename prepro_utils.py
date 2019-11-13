@@ -134,7 +134,16 @@ def merge_same(phrases):
 
 
 def filter_overlap(positions):
-    '''delete overlap keyphrase positions'''
+    '''
+    delete overlap keyphrase positions
+    if `w1 w2 w3 w4` and `w4 w5`, then remove `w4 w5`, the common word is `w4`.
+
+    Params :
+        `positions`, [[s1, e1], [s2, e2], ..., [s2_1, e2_1], [s2_2, e2_2], ...]
+
+    Return :
+        [[s1, e1], [s2, e2], ..., [s2_1, e2_1], [s2_2, e2_2], ...]
+    '''
     previous_e = -1
     filter_positions = []
     for i, (s, e) in enumerate(positions):
@@ -208,9 +217,23 @@ def find_answer(document, answers):
 # ----------------------------------------------------------------------------------------
 # verify preprocess
 def verify_ex(ex):
-    ''' If you want to check whether the preprocess is true, 
+    """
+    If you want to check whether the preprocess is true,
     use these functions :`check_tokenize` & `check_tag`
-    '''
+
+    :param ex:
+        {
+            'url': 'http://...',
+            'ex_id': 0-n Int index,
+            'tokens': ['Th##', '##is', 'is', 'a', 'test', ...],
+            'label': ['O', 'O', 'B', 'I', 'I', 'E', 'O', 'O', 'O', ...],
+            'valid_mask': [1,     0,      1,     1,   1, ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
+            'tok_to_orig_index': [0,      0,      1,    2,   3,     ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
+            'orig_tokens': [w1, w2, w3, ...],
+            'orig_phrases': [[kp_w1, kp_w2, ...], ...],
+            'orig_start_end_pos': [[s1, e1], [s2, e2], ..., [s2_1, e2_1], [s2_2, e2_2], ...]
+        }
+    """
     if check_tokenize(ex) and check_tag(ex):
         return True
     return False
@@ -251,15 +274,15 @@ def get_chunk_positions(tag_list, score_list=None):
         each score is the prob of the tag prediction from model output
     Output : 
         chunk_postions : each chunk's start and end position list [[Ps1,Pe1], ...]
-        chunk_scores : avearge the chunks'tag scores for each chunck
+        chunk_scores : average the chunks'tag scores for each chunk
     '''
     if score_list is None:
         score_list = [1.0] * len(tag_list)
     assert len(tag_list) == len(score_list)
 
     abs_p1 = 0
-    chunk_postions = []
-    chunk_scores = []
+    chunk_postions = []  # [[s1, e1], [s2, e2], ...]
+    chunk_scores = []  # [score1, score2, score3, ...]
     while abs_p1 < len(tag_list):
         now_tag = tag_list[abs_p1]
 
@@ -291,7 +314,7 @@ def get_chunk_positions(tag_list, score_list=None):
                     continue
             if flag and pe >= ps:
                 chunk_postions.append([ps, pe])
-                chunk_scores.append(np.mean(score_list[ps:pe + 1]))
+                chunk_scores.append(np.mean(score_list[ps:pe + 1]))  # mean score among `B I I E`
             abs_p1 += p1_offset
 
     return np.array(chunk_postions), np.array(chunk_scores)

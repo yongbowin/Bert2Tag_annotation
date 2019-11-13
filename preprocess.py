@@ -124,13 +124,24 @@ def filter_absent_phrase(examples):
             ],
             ...
         ]
+
+    :return
+        [
+            {
+                'url': 'http://...',
+                'doc_tokens': [w1, w2, w3, ...],
+                'keyphrases': [[kp_w1, kp_w2, ...], ...],
+                'start_end_pos': [[s1, e1], [s2, e2], ..., [s2_1, e2_1], [s2_2, e2_2], ...]
+            },
+            ...
+        ]
     '''
-    data_list = []
+    data_list = []  # [{}, {}, ...]
     overlap_num = 0
 
     null_index = []  # all `keyphrase` not found in current text.
     absent_index = []  # part of `keyphrase` not found in current text.
-    for idx, ex in enumerate(tqdm(examples)):
+    for idx, ex in enumerate(tqdm(examples)):  # for each sample.
 
         """
         `lower_tokens`: 
@@ -158,22 +169,21 @@ def filter_absent_phrase(examples):
             absent_index.append(idx)
 
         """
-        `flatten_postions`, 
+        `flatten_postions`, (always)
             [[s1, e1], [s2, e2], ..., [s2_1, e2_1], [s2_2, e2_2], ...]
         """
         # filter overlap label positions
         flatten_postions = [pos for poses in present_phrases['start_end_pos'] for pos in poses]
-        sorted_positions = sorted(flatten_postions, key=lambda x: x[0])
-
+        sorted_positions = sorted(flatten_postions, key=lambda x: x[0])  # 升序
         filter_positions = prepro_utils.filter_overlap(sorted_positions)
         if len(filter_positions) != len(sorted_positions):
             overlap_num += 1
 
         data = {}
-        data['url'] = ex[-1]
-        data['doc_tokens'] = ex[0]
-        data['keyphrases'] = prepro_phrases
-        data['start_end_pos'] = filter_positions
+        data['url'] = ex[-1]  # 'http://...'
+        data['doc_tokens'] = ex[0]  # [w1, w2, w3, ...]
+        data['keyphrases'] = prepro_phrases  # [[kp_w1, kp_w2, ...], ...]
+        data['start_end_pos'] = filter_positions  # [[s1, e1], [s2, e2], ..., [s2_1, e2_1], [s2_2, e2_2], ...]
         data_list.append(data)
 
     logger.info('%d sample is null, null_index as follow : ' % len(null_index))
@@ -191,18 +201,64 @@ def filter_absent_phrase(examples):
 # convert examples for training bert
 
 def convert_for_bert_tag(examples, tokenizer):
-    ''' main preprocess function & verify '''
+    """
+    main preprocess function & verify.
 
-    Features = []
-    for (example_index, example) in enumerate(tqdm(examples)):
+    :param examples:
+        [
+            {
+                'url': 'http://...',
+                'doc_tokens': [w1, w2, w3, ...],
+                'keyphrases': [[kp_w1, kp_w2, ...], ...],
+                'start_end_pos': [[s1, e1], [s2, e2], ..., [s2_1, e2_1], [s2_2, e2_2], ...]
+            },
+            ...
+        ]
+    :param tokenizer:
+        opt.cache_dir:
+            ./DATA/pretrain_model/bert-base-cased
+        tokenizer = BertTokenizer.from_pretrained(opt.cache_dir)
+    :return:
+        [
+            {
+                'url': 'http://...',
+                'ex_id': 0-n Int index,
+                'tokens': ['Th##', '##is', 'is', 'a', 'test', ...],
+                'label': ['O', 'O', 'B', 'I', 'I', 'E', 'O', 'O', 'O', ...],
+                'valid_mask': [1,     0,      1,     1,   1, ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
+                'tok_to_orig_index': [0,      0,      1,    2,   3,     ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
+                'orig_tokens': [w1, w2, w3, ...],
+                'orig_phrases': [[kp_w1, kp_w2, ...], ...],
+                'orig_start_end_pos': [[s1, e1], [s2, e2], ..., [s2_1, e2_1], [s2_2, e2_2], ...]
+            },
+            ...
+        ]
+    """
 
+    Features = []  # [{}, {}, ...]
+    for (example_index, example) in enumerate(tqdm(examples)):  # for each sample.
+
+        """
+        Input sentence: 'This is a test ...'
+        
+        `valid_mask`, 
+            'Th##', '##is', 'is', 'a', 'test', ...
+            [1,     0,      1,     1,   1, ...]
+                    
+        `all_doc_tokens`, (all sub tokens)
+            ['Th##', '##is', 'is', 'a', 'test', ...]
+        
+        `tok_to_orig_index`, (indicate the position in raw whole word)
+            'Th##', '##is', 'is', 'a', 'test', ...
+            [0,      0,      1,    2,   3,     ...]
+        """
         valid_mask = []
         all_doc_tokens = []
         tok_to_orig_index = []
         for (i, token) in enumerate(example['doc_tokens']):
             sub_tokens = tokenizer.tokenize(token)
             if len(sub_tokens) < 1:
-                sub_tokens = [UNK_WORD]
+                sub_tokens = [UNK_WORD]  # UNK_WORD = '[UNK]'
             for num, sub_token in enumerate(sub_tokens):
                 tok_to_orig_index.append(i)
                 all_doc_tokens.append(sub_token)
@@ -211,6 +267,15 @@ def convert_for_bert_tag(examples, tokenizer):
                 else:
                     valid_mask.append(0)
 
+        """
+        `label`: ['O', 'O', 'B', 'I', 'I', 'E', 'O', 'O', 'O', ...]
+        
+        'O' : non-keyphrase
+        'B' : begin word of the keyphrase
+        'I' : middle word of the keyphrase
+        'E' : end word of the keyphrase
+        'U' : single word keyphrase
+        """
         label = ['O' for _ in range(len(example['doc_tokens']))]
         for s, e in example['start_end_pos']:
             if s == e:
@@ -229,6 +294,19 @@ def convert_for_bert_tag(examples, tokenizer):
                 logger.info('ERROR')
                 break
 
+        """
+        {
+            'url': 'http://...',
+            'ex_id': 0-n Int index,
+            'tokens': ['Th##', '##is', 'is', 'a', 'test', ...],
+            'label': ['O', 'O', 'B', 'I', 'I', 'E', 'O', 'O', 'O', ...],
+            'valid_mask': [1,     0,      1,     1,   1, ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
+            'tok_to_orig_index': [0,      0,      1,    2,   3,     ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
+            'orig_tokens': [w1, w2, w3, ...],
+            'orig_phrases': [[kp_w1, kp_w2, ...], ...],
+            'orig_start_end_pos': [[s1, e1], [s2, e2], ..., [s2_1, e2_1], [s2_2, e2_2], ...]
+        }
+        """
         InputFeatures = {}
         InputFeatures['url'] = example['url']
         InputFeatures['ex_id'] = example_index  # yes
@@ -252,9 +330,15 @@ def convert_for_bert_tag(examples, tokenizer):
 # ----------------------------------------------------------------------------------------
 # convert Eval examples for Test
 def preprocess_for_Eval(examples, tokenizer):
-    ''' main preprocess function & verify '''
+    """
+    main preprocess function & verify
 
-    Features = []
+    :param examples: [{}, {}, ...], (source data loaded from jsonl)
+    :param tokenizer:
+    :return:
+    """
+
+    Features = []  # [{}, {}, ...]
     shuffler = prepro_utils.DEL_ASCII()
     for (example_index, example) in enumerate(tqdm(examples)):
         doc_tokens = [w.strip() for w in example['text'].split() if shuffler.do(w.strip())]
@@ -274,12 +358,22 @@ def preprocess_for_Eval(examples, tokenizer):
                 else:
                     valid_mask.append(0)
 
+        """
+        {
+            'url': 'http://...',
+            'ex_id': 0-n Int index,
+            'VDOM': xxx,
+            'tokens': ['Th##', '##is', 'is', 'a', 'test', ...],
+            'valid_mask': [1,     0,      1,     1,   1, ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
+            'tok_to_orig_index': [0,      0,      1,    2,   3,     ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
+            'orig_tokens': [w1, w2, w3, ...],
+        }
+        """
         InputFeatures = {}
         InputFeatures['ex_id'] = example_index
         InputFeatures['url'] = example['url']
         InputFeatures['VDOM'] = example['VDOM']
         InputFeatures['orig_tokens'] = doc_tokens
-
         InputFeatures['tokens'] = all_doc_tokens
         InputFeatures['valid_mask'] = valid_mask
         InputFeatures['tok_to_orig_index'] = tok_to_orig_index
@@ -340,22 +434,78 @@ def main_preocess(input_mode, save_mode):
 
     # preprocess for training
     if input_mode in ['Train', 'Dev']:
+        """
+        tokenize_data:
+            [
+                [
+                    [w1, w2, w3, ...], 
+                    [[kp_w1, kp_w2, ...], ...], 
+                    'http://...'
+                ], 
+                ...
+            ]
+        """
         tokenize_data = tokenize_source_data(source_data)
         logger.info('2/5: success tokenize %s data !' % save_mode)
 
+        """
+        present_data:
+            [
+                {
+                    'url': 'http://...',
+                    'doc_tokens': [w1, w2, w3, ...],
+                    'keyphrases': [[kp_w1, kp_w2, ...], ...],
+                    'start_end_pos': [[s1, e1], [s2, e2], ..., [s2_1, e2_1], [s2_2, e2_2], ...]
+                },
+                ...
+            ]
+        """
         present_data = filter_absent_phrase(tokenize_data)
         logger.info('3/5 : success obtain %s present keyphrase for training bert: %d (filter out : %d)'
                     % (save_mode, len(present_data), (len(tokenize_data) - len(present_data))))
 
+        """
+        return_examples: (for trainset or devset)
+            [
+                {
+                    'url': 'http://...',
+                    'ex_id': 0-n Int index,
+                    'tokens': ['Th##', '##is', 'is', 'a', 'test', ...],
+                    'label': ['O', 'O', 'B', 'I', 'I', 'E', 'O', 'O', 'O', ...],
+                    'valid_mask': [1,     0,      1,     1,   1, ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
+                    'tok_to_orig_index': [0,      0,      1,    2,   3,     ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
+                    'orig_tokens': [w1, w2, w3, ...],
+                    'orig_phrases': [[kp_w1, kp_w2, ...], ...],
+                    'orig_start_end_pos': [[s1, e1], [s2, e2], ..., [s2_1, e2_1], [s2_2, e2_2], ...]
+                },
+                ...
+            ]
+        """
         return_examples = convert_for_bert_tag(present_data, tokenizer)
         logger.info('4/5 : success obtain %s data for training bert .' % save_mode)
 
     # preprocess for evaluation
-    elif input_mode == 'EvalPublic':
+    elif input_mode == 'EvalPublic':  # testset
+        """
+        return_examples: (for testset)
+            {
+                'url': 'http://...',
+                'ex_id': 0-n Int index,
+                'VDOM': xxx,
+                'tokens': ['Th##', '##is', 'is', 'a', 'test', ...],
+                'valid_mask': [1,     0,      1,     1,   1, ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
+                'tok_to_orig_index': [0,      0,      1,    2,   3,     ...],  # 'Th##', '##is', 'is', 'a', 'test', ...
+                'orig_tokens': [w1, w2, w3, ...],
+            }
+        """
         return_examples = preprocess_for_Eval(source_data, tokenizer)
     else:
         logger.info('Error : not this mode : %s' % input_mode)
 
+    """
+    opt.output_path: (default)
+        './new_cached_features'
+    """
     filename = os.path.join(opt.output_path, "openkp.%s.json" % save_mode)
     save_preprocess_data(return_examples, filename)
     logger.info("5/5 : success saved %s data to : %s" % (save_mode, filename))

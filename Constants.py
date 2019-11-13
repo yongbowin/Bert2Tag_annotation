@@ -10,7 +10,7 @@ BOS_WORD = '[CLS]'
 EOS_WORD = '[SEP]'
 DIGIT_WORD = '[unused0]'
 
-Idx2Tag = ['O','B','I','E','U']
+Idx2Tag = ['O', 'B', 'I', 'E', 'U']
 
 # 'O' : non-keyphrase
 # 'B' : begin word of the keyphrase
