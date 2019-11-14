@@ -33,9 +33,16 @@ def set_seed(args):
 
 
 def train(args, data_loader, model, stats, writer):
+    """
+    :param data_loader: train_data_loader
+    :param model: model = KeyphraseSpanExtraction(args)
+    :param stats: stats = {'timer': utils.Timer(), 'epoch': 0, 'min_eval_loss': float("inf")}
+    :param writer: tb_writer, for tf
+    :return:
+    """
     logger.info("start training %d epoch ..." % stats['epoch'])
 
-    train_loss = utils.AverageMeter()
+    train_loss = utils.AverageMeter()  # Computes and stores the average and current value.
     epoch_time = utils.Timer()
 
     epoch_loss = 0
@@ -211,7 +218,7 @@ if __name__ == "__main__":
     """
     dataset_dict = utils.read_openkp_examples(args, tokenizer)
 
-    # 构建训练数据
+    # 5.1构建训练数据
     # train dataloader
     """
     `args.per_gpu_train_batch_size`: Batch size per GPU/CPU for training.
@@ -247,8 +254,10 @@ if __name__ == "__main__":
         pin_memory=args.cuda,  # bool
     )
 
+    # 5.2构建验证数据
     # valid dataset
     args.valid_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
+    # 转为id，转为tensor
     valid_dataset = utils.build_openkp_dataset(args, dataset_dict['valid'], tokenizer,
                                                converter)  # don't use DistributedSampler
 
@@ -264,6 +273,7 @@ if __name__ == "__main__":
     )
 
     # -------------------------------------------------------------------------------------------
+    # 6.设置总训练步数
     # Set training total steps
     if args.max_train_steps > 0:
         t_total = args.max_train_steps
@@ -274,8 +284,13 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------------------------
     # Preprare Model & Optimizer
     # -------------------------------------------------------------------------------------------
-    logger.info(" ************************** Initilize Model & Optimizer ************************** ")
+    # 7.初始化模型和优化器
+    logger.info(" ************************** Initialize Model & Optimizer ************************** ")
 
+    """
+    `args.checkpoint_file`, loaded checkpoint model continue training.
+    `args.load_checkpoint`, default=False
+    """
     if args.load_checkpoint and os.path.isfile(args.checkpoint_file):
         model = KeyphraseSpanExtraction.load_checkpoint(args.checkpoint_file, args)
     else:
@@ -319,6 +334,7 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------------------------
     # start training
     # -------------------------------------------------------------------------------------------
+    # 8.开始训练
     model.zero_grad()
     stats = {'timer': utils.Timer(), 'epoch': 0, 'min_eval_loss': float("inf")}
 

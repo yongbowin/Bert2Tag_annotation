@@ -167,6 +167,12 @@ def batchify_features_for_train_eval(batch):
 
     :param batch: where is `batch` comes from? TODO:
     :return:
+        `input_ids`, tensor: shape=batch样本个数 × 最大样本长度（即样本中词个数最大值）,
+        `input_mask`, tensor: shape=batch样本个数 × 最大样本长度, 即把样本长度个位置用1填充，其余为0,
+        `valid_ids`, tensor: shape=batch样本个数 × 最大验证样本长度（即验证样本中词个数最大值）,
+        `active_mask`, tensor: shape=batch样本个数 × 最大样本长度, 即把样本长度个位置用1填充，其余为0,
+        `labels`, tensor: shape=batch样本个数 × 最大样本长度（即样本中词个数最大值）,
+        `ids`, list: [idx1, idx2, idx3, ...], 当前样本在examples中的index
     """
 
     ids = [ex[0] for ex in batch]  # index
@@ -201,6 +207,7 @@ def batchify_features_for_train_eval(batch):
         active_mask[i, :t.size(0)].fill_(1)
 
     assert input_ids.size() == valid_ids.size() == labels.size()
+
     return input_ids, input_mask, valid_ids, active_mask, labels, ids
 
 

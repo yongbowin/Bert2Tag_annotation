@@ -70,7 +70,7 @@ def add_default_args(parser):
     optim.add_argument("--learning_rate", default=5e-5, type=float,
                        help="The initial learning rate for Adam.")
     optim.add_argument("--weight_decay", default=0.01, type=float,
-                       help="Weight deay if we apply some. 0.01?")
+                       help="Weight decay if we apply some. 0.01?")
     optim.add_argument("--warmup_proportion", default=0, type=int,
                        help="Linear warmup over warmup_ratio warm_step / t_total.")
     optim.add_argument("--adam_epsilon", default=1e-8, type=float,
