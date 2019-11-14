@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
+# from apex import amp
 
 from utils import override_args
 from networks import BertForSeqTagging
@@ -56,13 +57,38 @@ class KeyphraseSpanExtraction(object):
 
     # -------------------------------------------------------------------------------------------
     # -------------------------------------------------------------------------------------------
-    def update(self, step, batch):
+    def update(self, step, batch):  # for one batch
         # Train mode
-        self.network.train()
+        self.network.train()  # Sets the module in training mode.
 
+        """
+        TODO: Why the first-5 in batch???
+        
+        The reason are :
+            batch = [input_ids, input_mask, valid_ids, active_mask, labels, ids]  (for `train`)
+            
+            batch = [input_ids, input_mask, valid_ids, active_mask, valid_lens, ids]  (for `test`)
+        """
         # Transfer to GPU
         inputs = [b.to(self.args.device) for b in batch[:5]]
 
+        """
+        `self.network(*inputs)` :
+            列表前面加星号作用是将列表解开成两个独立的参数，传入函数，
+            字典前面加两个星号，是将字典解开成独立的元素作为形参。
+        
+        Examples:
+            def add(a, b):
+                return a+b
+             
+            data = [4,3]
+            print add(*data)
+            #equals to print add(4, 3)
+            
+            data = {'a' : 4, 'b' : 3}
+            print add(**data)
+            #equals to print add(4, 3)
+        """
         # run !
         loss = self.network(*inputs)
 
@@ -74,7 +100,7 @@ class KeyphraseSpanExtraction(object):
             loss = loss / self.args.gradient_accumulation_steps
 
         if self.args.fp16:
-            with amp.scale_loss(loss, self.optimizer) as scaled_loss:
+            with amp.scale_loss(loss, self.optimizer) as scaled_loss:  # TODO: amp?
                 scaled_loss.backward()
             torch.nn.utils.clip_grad_norm_(amp.master_params(self.optimizer), self.args.max_grad_norm)
         else:

@@ -49,7 +49,9 @@ def train(args, data_loader, model, stats, writer):
     epoch_step = 0
 
     for step, batch in enumerate(tqdm(data_loader)):
-
+        """
+        batch = [input_ids, input_mask, valid_ids, active_mask, labels, ids]
+        """
         try:
             loss = model.update(step, batch)
         except:
